@@ -62,6 +62,16 @@ SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fa
 
 yag = yagmail.SMTP(SENDER_EMAIL, SENDER_PASSWORD)
 
+def format_pickup_time(pickup_str):
+    try:
+        # normalize input like "12:41am" → "12:41 AM"
+        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
+        pickup_str = pickup_str.replace("  ", " ")
+        pickup_dt = datetime.strptime(pickup_str, "%I:%M %p")
+        return pickup_dt.strftime("%I:%M %p")
+    except Exception:
+        return pickup_str  # fallback if parsing fails
+    
 def send_reminder_email(order_id):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -69,6 +79,9 @@ def send_reminder_email(order_id):
     row = cursor.fetchone()
     if row:
         email, full_name, pickup_time, item_name, order_number, custom_subject, custom_body = row
+
+        pickup_time = format_pickup_time(pickup_time)
+
         default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
         default_body = "Hi {full_name},\n\nThis is a reminder that your order '{item_name}' is scheduled for pickup at {pickup_time}.\n\nThank you,\nBentolocious Team\n\nPick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)\nThe store is located at the back side of the plaza near Chabot Drive."
         subject = custom_subject.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=pickup_time) if custom_subject else default_subject.format(order_number=order_number,item_name=item_name)
@@ -92,12 +105,12 @@ def parse_date_from_item_name(item_name):
     raise ValueError(f"Could not parse date from item_name: {item_name}")
 
 def parse_pickup_time(pickup_str):
-    # Parse "1:11 PM" to datetime.time
+       # Parse "1:11PM" to datetime.time
     try:
         return datetime.strptime(pickup_str, '%I:%M%p').time()
     except ValueError as e:
         raise ValueError(f"Invalid pickup time format: {pickup_str}") from e
-
+    
 # Custom Jinja2 filter for formatting datetime
 def format_datetime(value):
     if isinstance(value, str):
@@ -157,7 +170,7 @@ def upload():
                     date = parse_date_from_item_name(item_name)
                     pickup_datetime = datetime.combine(date, pickup_time).replace(tzinfo=LOCAL_TZ)
                     
-                    send_datetime = pickup_datetime - timedelta(hours=2)
+                    send_datetime = pickup_datetime - timedelta(hours=4)
                     
                     cursor.execute('''
                         INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body)
@@ -192,14 +205,14 @@ def scheduled():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT id, full_name, email, pickup_time, send_time, status 
+        SELECT id, full_name, email, item_name, pickup_time, send_time, status 
         FROM orders 
         ORDER BY send_time DESC
     ''')
     rows = cursor.fetchall()
     # Convert send_time strings to datetime objects
     rows = [
-        (row[0], row[1], row[2], row[3], datetime.fromisoformat(row[4]) if isinstance(row[4], str) else row[4], row[5])
+        (row[0], row[1], row[2], row[3], row[4], datetime.fromisoformat(row[5]) if isinstance(row[5], str) else row[5], row[6])
         for row in rows
     ]
     conn.close()

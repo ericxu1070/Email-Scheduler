@@ -57,6 +57,7 @@
                         <th></th>
                         <th>Full Name</th>
                         <th>Email</th>
+                        <th>Item Name</th>
                         <th>Pickup Time</th>
                         <th>Send Time</th>
                         <th>Status</th>
@@ -65,16 +66,17 @@
                 </thead>
                 <tbody>
                     {% for row in rows %}
-                        {% set is_past_due = (row[5] == 'pending' and row[4] < now) %}
+                        {% set is_past_due = (row[6] == 'pending' and row[5] < now) %}
                         <tr>
                             <td><input type="checkbox" name="orders[]" value="{{ row[0] }}"></td>
-                            <td>{{ row[1] }}</td>
-                            <td>{{ row[2] }}</td>
-                            <td>{{ row[3] }}</td>
-                            <td>{{ row[4] | format_datetime }}</td>
-                            <td>{{ row[5] }}</td>
+                            <td>{{ row[1] }}</td>  <!-- full_name -->
+                            <td>{{ row[2] }}</td>  <!-- email -->
+                            <td>{{ row[3] }}</td>  <!-- item_name -->
+                            <td>{{ row[4] }}</td>  <!-- pickup_time -->
+                            <td>{{ row[5] | format_datetime }}</td> <!-- send_time -->
+                            <td>{{ row[6] }}</td> <!-- status -->
                             <td>
-                                {% if row[5] == 'sent' %}
+                                {% if row[6] == 'sent' %}
                                     Sent
                                 {% elif is_past_due %}
                                     <span class="badge bg-warning">Past Due</span>
