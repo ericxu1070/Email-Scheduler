@@ -16,6 +16,22 @@
 <body>
     <div class="container mt-5">
         <h1 class="mb-4">Scheduled Emails</h1>
+        <p><strong>Current Time:</strong> <span id="current-time"></span></p>
+
+        <script> //live updating clock
+        function updateTime() {
+            const options = { 
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: true, timeZone: 'America/Los_Angeles'
+            };
+            document.getElementById('current-time').textContent =
+                new Intl.DateTimeFormat('en-US', options).format(new Date());
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        </script>
+
         <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">Back to Dashboard</a>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}

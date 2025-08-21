@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 import re
 from zoneinfo import ZoneInfo
 
+LOCAL_TZ = ZoneInfo('America/Los_Angeles')
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'Uploads'
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')  # Fallback for local testing
@@ -67,12 +69,12 @@ def send_reminder_email(order_id):
     row = cursor.fetchone()
     if row:
         email, full_name, pickup_time, item_name, order_number, custom_subject, custom_body = row
-        default_subject = "Reminder: Your Order {order_number} is Ready Soon"
-        default_body = "Dear {full_name},\n\nThis is a reminder that your order '{item_name}' is scheduled for pickup at {pickup_time}.\n\nThank you!"
-        subject = custom_subject.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=pickup_time) if custom_subject else default_subject.format(order_number=order_number)
+        default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
+        default_body = "Hi {full_name},\n\nThis is a reminder that your order '{item_name}' is scheduled for pickup at {pickup_time}.\n\nThank you,\nBentolocious Team\n\nPick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)\nThe store is located at the back side of the plaza near Chabot Drive."
+        subject = custom_subject.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=pickup_time) if custom_subject else default_subject.format(order_number=order_number,item_name=item_name)
         body = custom_body.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=pickup_time) if custom_body else default_body.format(full_name=full_name, item_name=item_name, pickup_time=pickup_time)
         try:
-            yag.send(to=email, subject=subject, contents=body)
+            yag.send(to=email, subject=subject, contents=[body,"\n",yagmail.inline("bento.png")])
             cursor.execute('UPDATE orders SET status = "sent" WHERE id = ?', (order_id,))
             conn.commit()
         except Exception as e:
@@ -85,14 +87,14 @@ def parse_date_from_item_name(item_name):
     match = re.search(r'(\d{1,2}/\d{1,2})', item_name)
     if match:
         month, day = map(int, match.group(1).split('/'))
-        year = datetime.now(tz=ZoneInfo('UTC')).year  # Use UTC for consistency
+        year = datetime.now(tz=LOCAL_TZ).year  # Use UTC for consistency
         return datetime(year, month, day).date()
     raise ValueError(f"Could not parse date from item_name: {item_name}")
 
 def parse_pickup_time(pickup_str):
     # Parse "1:11 PM" to datetime.time
     try:
-        return datetime.strptime(pickup_str, '%I:%M %p').time()
+        return datetime.strptime(pickup_str, '%I:%M%p').time()
     except ValueError as e:
         raise ValueError(f"Invalid pickup time format: {pickup_str}") from e
 
@@ -153,7 +155,7 @@ def upload():
                     
                     pickup_time = parse_pickup_time(pickup_time_str)
                     date = parse_date_from_item_name(item_name)
-                    pickup_datetime = datetime.combine(date, pickup_time).replace(tzinfo=ZoneInfo('UTC'))
+                    pickup_datetime = datetime.combine(date, pickup_time).replace(tzinfo=LOCAL_TZ)
                     
                     send_datetime = pickup_datetime - timedelta(hours=2)
                     
@@ -164,7 +166,7 @@ def upload():
                     order_id = cursor.lastrowid
                     
                     job_id = None
-                    if send_datetime > datetime.now(tz=ZoneInfo('UTC')):
+                    if send_datetime > datetime.now(tz=LOCAL_TZ):
                         trigger = DateTrigger(run_date=send_datetime)
                         job = scheduler.add_job(send_reminder_email, trigger, args=[order_id])
                         job_id = job.id
@@ -201,7 +203,7 @@ def scheduled():
         for row in rows
     ]
     conn.close()
-    return render_template('scheduled.html', rows=rows, now=datetime.now(tz=ZoneInfo('UTC')))
+    return render_template('scheduled.html', rows=rows, now=datetime.now(tz=LOCAL_TZ))
 
 @app.route('/delete/<int:order_id>', methods=['GET'])
 def delete_order(order_id):
