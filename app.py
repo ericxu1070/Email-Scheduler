@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'Uploads'
-app.config['SECRET_KEY'] = 'your-secret-key'  # Required for flash messages
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')  # Fallback for local testing
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 DB_FILE = 'orders.db'
@@ -54,10 +54,9 @@ init_db()
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-# Email configuration - REPLACE WITH YOUR OWN FOR TESTING
-# For security, use environment variables in production
-SENDER_EMAIL = 'orderbentolicious@gmail.com'  # Change to your sender email
-SENDER_PASSWORD = 'ttys iklb sbcw zvlt'  # Use app password if using Gmail
+# Email configuration
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'orderbentolicious@gmail.com')  # Fallback for local testing
+SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fallback for local testing
 
 yag = yagmail.SMTP(SENDER_EMAIL, SENDER_PASSWORD)
 
