@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Reminder Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Order Reminder Dashboard</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <div class="row">
+            <div class="col-md-6">
+                <h2>Upload CSV</h2>
+                <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="sender_email" class="form-label">Sender Email (optional, to change):</label>
+                        <input type="email" class="form-control" id="sender_email" name="sender_email">
+                    </div>
+                    <div class="mb-3">
+                        <label for="sender_password" class="form-label">Sender Password (optional, to change):</label>
+                        <input type="password" class="form-control" id="sender_password" name="sender_password">
+                    </div>
+                    <div class="mb-3">
+                        <label for="custom_subject" class="form-label">Custom Subject (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time}):</label>
+                        <input type="text" class="form-control" id="custom_subject" name="custom_subject">
+                    </div>
+                    <div class="mb-3">
+                        <label for="custom_body" class="form-label">Custom Body (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time}):</label>
+                        <textarea class="form-control" id="custom_body" name="custom_body" rows="5"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Upload CSV File</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".csv">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <h2>Actions</h2>
+                <a href="{{ url_for('scheduled') }}" class="btn btn-secondary">Scheduled Emails</a>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
