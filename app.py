@@ -145,7 +145,7 @@ TVDA admin"""
             if 'Wonton' in item_name:
                 date = item_name.split()[0]
                 date = date[:-5]
-                default_subject = "[Bentolicious] "+ date + " Wonton Pick Up Reminder [Order #{order_number}]"
+                default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
                 default_body = """Hi {full_name},
 
 This is a reminder for your wonton order '{item_name}' scheduled for pickup around {pickup_time}.
@@ -155,6 +155,7 @@ Bentolicious Team
 
 Pick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)
 The store is located at the back side of the plaza near Chabot Drive.
+
 """
             else:
                 default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
@@ -167,6 +168,7 @@ Bentolicious Team
 
 Pick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)
 The store is located at the back side of the plaza near Chabot Drive.
+
 """
             # Ensure subject and body are not None
             subject = custom_subject if custom_subject else default_subject
