@@ -65,9 +65,9 @@ scheduler.start()
 
 # Email configuration
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'orderbentolicious@gmail.com')  # Fallback for meals
-SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'abcd efgh ijkl mnop')  # Fallback for meals
+SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fallback for meals
 DANCE_SENDER_EMAIL = 'usa.tvda@gmail.com'
-DANCE_SENDER_PASSWORD = 'abcd efgh ijkl mnop'  # Temporary app password for Dance Invoice
+DANCE_SENDER_PASSWORD = 'dntq izxf zqhr vyce'  # Temporary app password for Dance Invoice
 
 def format_pickup_time(pickup_str):
     if pickup_str is None:
@@ -97,7 +97,7 @@ def send_reminder_email(order_id, csv_format='familymeal'):
         sender_email = DANCE_SENDER_EMAIL if csv_format == 'dance_invoice' else SENDER_EMAIL
         sender_password = DANCE_SENDER_PASSWORD if csv_format == 'dance_invoice' else SENDER_PASSWORD
         yag = yagmail.SMTP(sender_email, sender_password)
-
+        full_name = full_name.split()[0]
         if csv_format == 'dance_invoice':
             # For dance invoices, item_name is invoice_desp, full_name is parent_name, order_number is invoice_num, pickup_time is student_name
             student_name = pickup_time
@@ -143,7 +143,9 @@ TVDA admin"""
                 item_name = ''
             formatted_pickup_time = pickup_time if 'Wonton' in item_name else format_pickup_time(pickup_time)
             if 'Wonton' in item_name:
-                default_subject = "[Bentolicious] Wonton Order Reminder (Order #{order_number})"
+                date = item_name.split()[0]
+                date = date[:-5]
+                default_subject = date + " Wonton Pick Up Reminder [Order #{order_number}]"
                 default_body = """Hi {full_name},
 
 This is a reminder for your wonton order '{item_name}' scheduled for pickup around {pickup_time}.
@@ -152,7 +154,8 @@ Thank you,
 Bentolicious Team
 
 Pick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)
-The store is located at the back side of the plaza near Chabot Drive."""
+The store is located at the back side of the plaza near Chabot Drive.
+"""
             else:
                 default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
                 default_body = """Hi {full_name},
@@ -163,7 +166,8 @@ Thank you,
 Bentolicious Team
 
 Pick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)
-The store is located at the back side of the plaza near Chabot Drive."""
+The store is located at the back side of the plaza near Chabot Drive.
+"""
             # Ensure subject and body are not None
             subject = custom_subject if custom_subject else default_subject
             body = custom_body if custom_body else default_body
