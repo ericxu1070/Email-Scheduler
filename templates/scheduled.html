@@ -13,10 +13,24 @@
         }
     </script>
 </head>
-<body class="bg-gray-300 font-sans">
+<body class="bg-gray-200 font-sans">
     <div class="container mx-auto p-4">
         <h1 class="text-2xl font-bold mb-4">Scheduled Emails</h1>
-        <p class="mb-4">Current Time: {{ now | format_datetime }}</p>
+         <p class="mb-4"><strong>Current Time:</strong> <span id="current-time"></span></p>
+
+        <script> //live updating clock
+        function updateTime() {
+            const options = { 
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: true, timeZone: 'America/Los_Angeles'
+            };
+            document.getElementById('current-time').textContent =
+                new Intl.DateTimeFormat('en-US', options).format(new Date());
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        </script>
 
         <div class="mb-4">
             <a href="{{ url_for('index') }}" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Back to Dashboard</a>

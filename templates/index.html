@@ -6,7 +6,7 @@
     <title>Order Reminder Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-300 font-sans">
+<body class="bg-gray-200 font-sans">
     <div class="container mx-auto p-4">
         <h1 class="text-2xl font-bold mb-4">Order Reminder Dashboard</h1>
 
@@ -25,11 +25,21 @@
             <h2 class="text-xl font-semibold mb-4">Upload CSV</h2>
             <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}" class="space-y-4">
                 <div>
-                    <label for="csv_format" class="block text-sm font-medium text-gray-700">CSV Format</label>
-                    <select name="csv_format" id="csv_format" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                        <option value="familymeal">Family Meal</option>
-                        <option value="wonton">Wonton</option>
-                    </select>
+                    <label class="block text-sm font-medium text-gray-700">CSV Format</label>
+                    <div class="mt-2 space-y-4">
+                        <label class="block">
+                            <input type="radio" name="csv_format" value="familymeal" checked class="form-radio text-blue-500">
+                            <span class="ml-2">Family Meal</span>
+                        </label>
+                        <label class="block">
+                            <input type="radio" name="csv_format" value="wonton" class="form-radio text-blue-500">
+                            <span class="ml-2">Wonton</span>
+                        </label>
+                        <label class="block">
+                            <input type="radio" name="csv_format" value="dance_invoice" class="form-radio text-blue-500">
+                            <span class="ml-2">Dance Invoice</span>
+                        </label>
+                    </div>
                 </div>
                 <div>
                     <label for="sender_email" class="block text-sm font-medium text-gray-700">Sender Email (optional, to change):</label>
@@ -40,11 +50,11 @@
                     <input type="password" name="sender_password" id="sender_password" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
                 </div>
                 <div>
-                    <label for="custom_subject" class="block text-sm font-medium text-gray-700">Custom Subject (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time}):</label>
+                    <label for="custom_subject" class="block text-sm font-medium text-gray-700">Custom Subject (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time} for meals; {student_name}, {parent_name}, {invoice_num}, {invoice_desp}, {total}, {invoice_url} for invoices):</label>
                     <input type="text" name="custom_subject" id="custom_subject" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
                 </div>
                 <div>
-                    <label for="custom_body" class="block text-sm font-medium text-gray-700">Custom Body (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time}):</label>
+                    <label for="custom_body" class="block text-sm font-medium text-gray-700">Custom Body (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time} for meals; {student_name}, {parent_name}, {invoice_num}, {invoice_desp}, {total}, {invoice_url} for invoices):</label>
                     <textarea name="custom_body" id="custom_body" rows="4" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
                 </div>
                 <div>
