@@ -4,95 +4,94 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheduled Emails</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         function toggleSelectAll() {
-            const checkboxes = document.querySelectorAll('input[name="orders[]"]');
-            const selectAllCheckbox = document.getElementById('select-all');
+            let checkboxes = document.querySelectorAll('input[name="orders[]"]');
+            let selectAllCheckbox = document.getElementById('select-all');
             checkboxes.forEach(checkbox => checkbox.checked = selectAllCheckbox.checked);
         }
     </script>
 </head>
-<body>
-    <div class="container mt-5">
-        <h1 class="mb-4">Scheduled Emails</h1>
-        <p><strong>Current Time:</strong> <span id="current-time"></span></p>
+<body class="bg-gray-300 font-sans">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">Scheduled Emails</h1>
+        <p class="mb-4">Current Time: {{ now | format_datetime }}</p>
 
-        <script> //live updating clock
-        function updateTime() {
-            const options = { 
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: true, timeZone: 'America/Los_Angeles'
-            };
-            document.getElementById('current-time').textContent =
-                new Intl.DateTimeFormat('en-US', options).format(new Date());
-        }
-        setInterval(updateTime, 1000);
-        updateTime();
-        </script>
+        <div class="mb-4">
+            <a href="{{ url_for('index') }}" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Back to Dashboard</a>
+        </div>
 
-        <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">Back to Dashboard</a>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                    <div class="p-4 mb-4 text-white {% if category == 'success' %}bg-green-500{% else %}bg-red-500{% endif %} rounded">
                         {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        <button onclick="this.parentElement.style.display='none'" class="float-right">&times;</button>
                     </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        <form action="{{ url_for('delete_bulk') }}" method="post">
-            <div class="mb-3">
-                <button type="submit" class="btn btn-danger">Delete Selected</button>
-                <div class="form-check form-check-inline ms-3">
-                    <input class="form-check-input" type="checkbox" id="select-all" onclick="toggleSelectAll()">
-                    <label class="form-check-label" for="select-all">Select All</label>
+
+        <div class="bg-gray-100 p-6 rounded shadow-md">
+            <form method="post" action="{{ url_for('delete_bulk') }}">
+                <div class="mb-4">
+                    <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Delete Selected</button>
+                    <label class="ml-4">
+                        <input type="checkbox" id="select-all" onclick="toggleSelectAll()"> Select All
+                    </label>
                 </div>
-            </div>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>Full Name</th>
-                        <th>Email</th>
-                        <th>Item Name</th>
-                        <th>Pickup Time</th>
-                        <th>Send Time</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in rows %}
-                        {% set is_past_due = (row[6] == 'pending' and row[5] < now) %}
-                        <tr>
-                            <td><input type="checkbox" name="orders[]" value="{{ row[0] }}"></td>
-                            <td>{{ row[1] }}</td>  <!-- full_name -->
-                            <td>{{ row[2] }}</td>  <!-- email -->
-                            <td>{{ row[3] }}</td>  <!-- item_name -->
-                            <td>{{ row[4] }}</td>  <!-- pickup_time -->
-                            <td>{{ row[5] | format_datetime }}</td> <!-- send_time -->
-                            <td>{{ row[6] }}</td> <!-- status -->
-                            <td>
-                                {% if row[6] == 'sent' %}
-                                    Sent
-                                {% elif is_past_due %}
-                                    <span class="badge bg-warning">Past Due</span>
-                                    <a href="{{ url_for('send_order', order_id=row[0]) }}" class="btn btn-sm btn-primary">Send Now</a>
-                                    <a href="{{ url_for('delete_order', order_id=row[0]) }}" class="btn btn-sm btn-danger">Delete</a>
-                                {% else %}
-                                    <span class="badge bg-success">Pending</span>
-                                    <a href="{{ url_for('delete_order', order_id=row[0]) }}" class="btn btn-sm btn-danger">Cancel</a>
-                                {% endif %}
-                            </td>
+
+                <table class="w-full table-auto border-collapse">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="border px-4 py-2"></th>
+                            <th class="border px-4 py-2">Full Name</th>
+                            <th class="border px-4 py-2">Email</th>
+                            <th class="border px-4 py-2">Item Name</th>
+                            <th class="border px-4 py-2">Pickup Time</th>
+                            <th class="border px-4 py-2">Send Time</th>
+                            <th class="border px-4 py-2">Status</th>
+                            <th class="border px-4 py-2">Actions</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </form>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            {% set is_past_due = (row[6] == 'pending' and row[5] < now) %}
+                            <tr class="{% if is_past_due %}bg-yellow-100{% else %}bg-white{% endif %}">
+                                <td class="border px-4 py-2">
+                                    <input type="checkbox" name="orders[]" value="{{ row[0] }}">
+                                </td>
+                                <td class="border px-4 py-2">{{ row[1] }}</td>
+                                <td class="border px-4 py-2">{{ row[2] }}</td>
+                                <td class="border px-4 py-2">{{ row[3] }}</td>
+                                <td class="border px-4 py-2">{{ row[4] }}</td>
+                                <td class="border px-4 py-2">{{ row[5] | format_datetime }}</td>
+                                <td class="border px-4 py-2">
+                                    {% if row[6] == 'sent' %}
+                                        Sent
+                                    {% elif is_past_due %}
+                                        Past Due
+                                    {% else %}
+                                        Pending
+                                    {% endif %}
+                                </td>
+                                <td class="border px-4 py-2">
+                                    {% if row[6] == 'sent' %}
+                                        Sent
+                                    {% elif is_past_due %}
+                                        <a href="{{ url_for('send_order', order_id=row[0]) }}" class="text-blue-500 hover:underline">Send Now</a>
+                                        <a href="{{ url_for('delete_order', order_id=row[0]) }}" class="text-red-500 hover:underline ml-2">Delete</a>
+                                    {% else %}
+                                        <a href="{{ url_for('delete_order', order_id=row[0]) }}" class="text-red-500 hover:underline">Cancel</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </form>
+        </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

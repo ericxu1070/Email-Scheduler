@@ -34,19 +34,11 @@ def init_db():
             full_name TEXT,
             send_time DATETIME,
             status TEXT DEFAULT 'pending',
-            job_id TEXT
+            job_id TEXT,
+            custom_subject TEXT,
+            custom_body TEXT
         )
     ''')
-    
-    # Check if custom_subject and custom_body columns exist, and add them if not
-    cursor.execute("PRAGMA table_info(orders)")
-    columns = [info[1] for info in cursor.fetchall()]
-    
-    if 'custom_subject' not in columns:
-        cursor.execute('ALTER TABLE orders ADD COLUMN custom_subject TEXT')
-    if 'custom_body' not in columns:
-        cursor.execute('ALTER TABLE orders ADD COLUMN custom_body TEXT')
-    
     conn.commit()
     conn.close()
 
@@ -64,13 +56,16 @@ yag = yagmail.SMTP(SENDER_EMAIL, SENDER_PASSWORD)
 
 def format_pickup_time(pickup_str):
     try:
-        # normalize input like "12:41am" → "12:41 AM"
+        # Normalize input like "12:41am" → "12:41 AM" or handle ranges like "4:30pm-7:30pm"
         pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
         pickup_str = pickup_str.replace("  ", " ")
+        # Handle range format (e.g., "4:30pm-7:30pm")
+        if '-' in pickup_str:
+            pickup_str = pickup_str.split('-')[0].strip()  # Take start time
         pickup_dt = datetime.strptime(pickup_str, "%I:%M %p")
         return pickup_dt.strftime("%I:%M %p")
     except Exception:
-        return pickup_str  # fallback if parsing fails
+        return pickup_str  # Fallback if parsing fails
     
 def send_reminder_email(order_id):
     conn = sqlite3.connect(DB_FILE)
@@ -80,14 +75,38 @@ def send_reminder_email(order_id):
     if row:
         email, full_name, pickup_time, item_name, order_number, custom_subject, custom_body = row
 
-        pickup_time = format_pickup_time(pickup_time)
+        # Define default templates based on item_name
+        if 'Wonton' in item_name:
+            default_subject = "[Bentolicious] Wonton Order Reminder (Order #{order_number})"
+            default_body = """Hi {full_name},
 
-        default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
-        default_body = "Hi {full_name},\n\nThis is a reminder that your order '{item_name}' is scheduled for pickup at {pickup_time}.\n\nThank you,\nBentolocious Team\n\nPick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)\nThe store is located at the back side of the plaza near Chabot Drive."
-        subject = custom_subject.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=pickup_time) if custom_subject else default_subject.format(order_number=order_number,item_name=item_name)
-        body = custom_body.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=pickup_time) if custom_body else default_body.format(full_name=full_name, item_name=item_name, pickup_time=pickup_time)
+This is a reminder for your wonton order '{item_name}' scheduled for pickup around {pickup_time}.
+
+Thank you,
+Bentolicious Team
+
+Pick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)
+The store is located at the back side of the plaza near Chabot Drive."""
+            # Use raw pickup_time for wonton orders
+            formatted_pickup_time = pickup_time
+        else:
+            default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
+            default_body = """Hi {full_name},
+
+This is a reminder that your order '{item_name}' is scheduled for pickup at {pickup_time}.
+
+Thank you,
+Bentolicious Team
+
+Pick up Location: Bentolicious (4833 Hopyard Road, E#3 Pleasanton)
+The store is located at the back side of the plaza near Chabot Drive."""
+            # Use formatted pickup time for non-wonton orders
+            formatted_pickup_time = format_pickup_time(pickup_time)
+
+        subject = custom_subject.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=formatted_pickup_time) if custom_subject else default_subject.format(order_number=order_number, item_name=item_name)
+        body = custom_body.format(full_name=full_name, order_number=order_number, item_name=item_name, pickup_time=formatted_pickup_time) if custom_body else default_body.format(full_name=full_name, item_name=item_name, pickup_time=formatted_pickup_time)
         try:
-            yag.send(to=email, subject=subject, contents=[body,"\n",yagmail.inline("bento.png")])
+            yag.send(to=email, subject=subject, contents=[body, "\n", yagmail.inline("bento.png")])
             cursor.execute('UPDATE orders SET status = "sent" WHERE id = ?', (order_id,))
             conn.commit()
         except Exception as e:
@@ -96,21 +115,32 @@ def send_reminder_email(order_id):
     conn.close()
 
 def parse_date_from_item_name(item_name):
-    # Extract date like 8/18 from "8/18 Family Meal"
-    match = re.search(r'(\d{1,2}/\d{1,2})', item_name)
+    # Extract date like 8/18 or 6/30/2025 from item_name
+    match = re.search(r'(\d{1,2}/\d{1,2}(?:/\d{4})?)', item_name)
     if match:
-        month, day = map(int, match.group(1).split('/'))
-        year = datetime.now(tz=LOCAL_TZ).year  # Use UTC for consistency
-        return datetime(year, month, day).date()
+        date_str = match.group(1)
+        try:
+            if len(date_str.split('/')) == 2:  # MM/DD format
+                month, day = map(int, date_str.split('/'))
+                year = datetime.now(tz=LOCAL_TZ).year
+            else:  # MM/DD/YYYY format
+                month, day, year = map(int, date_str.split('/'))
+            return datetime(year, month, day).date()
+        except ValueError as e:
+            raise ValueError(f"Could not parse date from item_name: {item_name}") from e
     raise ValueError(f"Could not parse date from item_name: {item_name}")
 
 def parse_pickup_time(pickup_str):
-       # Parse "1:11PM" to datetime.time
+    # Parse "1:11PM" or "Lunch: 11:00pm-2:00pm" to datetime.time
     try:
+        if ':' in pickup_str and '-' in pickup_str:  # Handle range format
+            pickup_str = pickup_str.split('-')[0].strip()  # Take start time
+            if 'Lunch' in pickup_str or 'Dinner' in pickup_str:
+                pickup_str = pickup_str.split(': ')[1].strip()  # Extract time after "Lunch: " or "Dinner: "
         return datetime.strptime(pickup_str, '%I:%M%p').time()
     except ValueError as e:
         raise ValueError(f"Invalid pickup time format: {pickup_str}") from e
-    
+
 # Custom Jinja2 filter for formatting datetime
 def format_datetime(value):
     if isinstance(value, str):
@@ -142,6 +172,7 @@ def upload():
 
     custom_subject = request.form.get('custom_subject', '').strip() or None
     custom_body = request.form.get('custom_body', '').strip() or None
+    csv_format = request.form.get('csv_format', 'familymeal')  # Default to familymeal
 
     if 'file' not in request.files:
         flash('No file uploaded', 'error')
@@ -158,13 +189,37 @@ def upload():
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             success_count = 0
+
+            # Define column mappings for each CSV format
+            column_mappings = {
+                'familymeal': {
+                    'email': 'Email',
+                    'order_number': 'Order Number',
+                    'pickup_time': 'Pick Up',
+                    'item_name': 'Item Name',
+                    'full_name': 'Full Name'
+                },
+                'wonton': {
+                    'email': 'Billing: E-mail Address',
+                    'order_number': 'Purchase ID',
+                    'pickup_time': 'PU Time',
+                    'item_name': 'Order Items: SKU',  # Will combine with Order Items: Category
+                    'full_name': 'Billing: Full Name'
+                }
+            }
+
+            mapping = column_mappings.get(csv_format, column_mappings['familymeal'])
+
             for _, row in df.iterrows():
                 try:
-                    email = row['Email']
-                    order_number = row['Order Number']
-                    pickup_time_str = row['Pick Up']
-                    item_name = row['Item Name']
-                    full_name = row['Full Name']
+                    email = row[mapping['email']]
+                    order_number = str(row[mapping['order_number']])
+                    pickup_time_str = row[mapping['pickup_time']]
+                    # Combine SKU and Category for wonton format
+                    item_name = row[mapping['item_name']]
+                    if csv_format == 'wonton':
+                        item_name = f"{row['Order Items: SKU']} {row['Order Items: Category']}"
+                    full_name = row[mapping['full_name']]
                     
                     pickup_time = parse_pickup_time(pickup_time_str)
                     date = parse_date_from_item_name(item_name)
@@ -187,7 +242,7 @@ def upload():
                     success_count += 1
                 except Exception as e:
                     print(f"Error processing row {row.to_dict()}: {e}")
-                    flash(f"Error processing row for {row.get('Email', 'unknown')}: {e}", 'error')
+                    flash(f"Error processing row for {row.get(mapping['email'], 'unknown')}: {e}", 'error')
             conn.commit()
             conn.close()
             os.remove(filepath)  # Clean up uploaded file
