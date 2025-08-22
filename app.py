@@ -65,9 +65,9 @@ scheduler.start()
 
 # Email configuration
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'orderbentolicious@gmail.com')  # Fallback for meals
-SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fallback for meals
+SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'abcd efgh ijkl mnop')  # Fallback for meals
 DANCE_SENDER_EMAIL = 'usa.tvda@gmail.com'
-DANCE_SENDER_PASSWORD = 'dntq izxf zqhr vyce'  # Temporary app password for Dance Invoice
+DANCE_SENDER_PASSWORD = 'abcd efgh ijkl mnop'  # Temporary app password for Dance Invoice
 
 def format_pickup_time(pickup_str):
     if pickup_str is None:
