@@ -145,7 +145,7 @@ TVDA admin"""
             if 'Wonton' in item_name:
                 date = item_name.split()[0]
                 date = date[:-5]
-                default_subject = date + " Wonton Pick Up Reminder [Order #{order_number}]"
+                default_subject = "[Bentolicious] "+ date + " Wonton Pick Up Reminder [Order #{order_number}]"
                 default_body = """Hi {full_name},
 
 This is a reminder for your wonton order '{item_name}' scheduled for pickup around {pickup_time}.
