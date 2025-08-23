@@ -4,71 +4,149 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Reminder Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #4a4a4a;
+        }
+        .alert {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            position: relative;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .close {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        form {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 600px;
+            margin: 0 auto 30px auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="password"],
+        input[type="file"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .radio-group {
+            margin-bottom: 15px;
+        }
+        .radio-option {
+            margin-bottom: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto 20px auto;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .link-section {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .link-section a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .link-section a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
-<body class="bg-gray-200 font-sans">
-    <div class="container mx-auto p-4">
-        <h1 class="text-2xl font-bold mb-4">Order Reminder Dashboard</h1>
+<body>
+    <h1>Order Reminder Dashboard</h1>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="p-4 mb-4 text-white {% if category == 'success' %}bg-green-500{% else %}bg-red-500{% endif %} rounded">
-                        {{ message }}
-                        <button onclick="this.parentElement.style.display='none'" class="float-right">&times;</button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                    <span class="close" onclick="this.parentElement.style.display='none';">&times;</span>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-        <div class="bg-gray-100 p-6 rounded shadow-md mb-4">
-            <h2 class="text-xl font-semibold mb-4">Upload CSV</h2>
-            <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">CSV Format</label>
-                    <div class="mt-2 space-y-4">
-                        <label class="block">
-                            <input type="radio" name="csv_format" value="familymeal" checked class="form-radio text-blue-500">
-                            <span class="ml-2">Family Meal</span>
-                        </label>
-                        <label class="block">
-                            <input type="radio" name="csv_format" value="wonton" class="form-radio text-blue-500">
-                            <span class="ml-2">Wonton</span>
-                        </label>
-                        <label class="block">
-                            <input type="radio" name="csv_format" value="dance_invoice" class="form-radio text-blue-500">
-                            <span class="ml-2">Dance Invoice</span>
-                        </label>
-                    </div>
+    <section>
+        <h2>Upload CSV</h2>
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('index') }}">
+            <label>CSV Format</label>
+            <div class="radio-group">
+                <div class="radio-option">
+                    <label><input type="radio" name="csv_format" value="familymeal" checked> Family Meal</label>
                 </div>
-                <div>
-                    <label for="sender_email" class="block text-sm font-medium text-gray-700">Sender Email (optional, to change):</label>
-                    <input type="email" name="sender_email" id="sender_email" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                <div class="radio-option">
+                    <label><input type="radio" name="csv_format" value="wonton"> Wonton</label>
                 </div>
-                <div>
-                    <label for="sender_password" class="block text-sm font-medium text-gray-700">Sender Password (optional, to change):</label>
-                    <input type="password" name="sender_password" id="sender_password" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                <div class="radio-option">
+                    <label><input type="radio" name="csv_format" value="dance_invoice"> Dance Invoice</label>
                 </div>
-                <div>
-                    <label for="custom_subject" class="block text-sm font-medium text-gray-700">Custom Subject (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time} for meals; {student_name}, {parent_name}, {invoice_num}, {invoice_desp}, {total}, {invoice_url} for invoices):</label>
-                    <input type="text" name="custom_subject" id="custom_subject" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="custom_body" class="block text-sm font-medium text-gray-700">Custom Body (optional, use placeholders like {full_name}, {order_number}, {item_name}, {pickup_time} for meals; {student_name}, {parent_name}, {invoice_num}, {invoice_desp}, {total}, {invoice_url} for invoices):</label>
-                    <textarea name="custom_body" id="custom_body" rows="4" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
-                </div>
-                <div>
-                    <label for="file" class="block text-sm font-medium text-gray-700">Upload CSV File</label>
-                    <input type="file" name="file" id="file" accept=".csv" class="mt-1 block w-full">
-                </div>
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Upload</button>
-            </form>
-        </div>
+            </div>
 
-        <div class="bg-gray-100 p-6 rounded shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Actions</h2>
-            <a href="{{ url_for('scheduled') }}" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Scheduled Emails</a>
-        </div>
-    </div>
+            <label for="csv_file">Upload CSV File</label>
+            <input type="file" name="csv_file" id="csv_file" accept=".csv">
+
+            <button type="submit">Upload</button>
+
+            <label for="sender_email">Sender Email (optional, to change):</label>
+            <input type="text" name="sender_email" id="sender_email">
+
+            <label for="sender_password">Sender Password (optional, to change):</label>
+            <input type="password" name="sender_password" id="sender_password">
+
+            <label for="custom_subject">Custom Subject (optional, use placeholders):</label>
+            <input type="text" name="custom_subject" id="custom_subject">
+
+            <label for="custom_body">Custom Body (optional, use placeholders):</label>
+            <textarea name="custom_body" id="custom_body"></textarea>
+        </form>
+    </section>
+
+    <section class="link-section">
+        <a href="{{ url_for('scheduled') }}">View Scheduled Emails</a>
+    </section>
 </body>
 </html>
