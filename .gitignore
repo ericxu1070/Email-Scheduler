@@ -1,1 +1,22 @@
-orders.db pycache/ *.pyc venv/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment / secrets
+.env
+.env.*
+SECRET_KEY
+
+# Database
+orders.db
+
+# Uploads
+Uploads/
+
+# IDEs
+.vscode/
+.idea/
+
+# Docker
+*.dockerignore
