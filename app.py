@@ -272,7 +272,7 @@ TVDA admin"""
 def format_datetime(dt):
     if dt is None:
         return ''
-    return dt.strftime('%m-%d %H:%M:%S')
+    return dt.strftime('%m-%d %I:%M:%S %p')
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
