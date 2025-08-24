@@ -88,56 +88,56 @@ DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr 
 # Helpers
 # -----------------------------
 
-def parse_pickup_time(pickup_str):
+def parse_pickup_time(pickup_str, csv_format='familymeal'):
     if not pickup_str or not isinstance(pickup_str, str):
         print(f"Invalid pickup time: {pickup_str}")
         return datetime.min.time()
     try:
         pickup_str = pickup_str.strip().upper()
-        # Normalize AM/PM formats (e.g., "3PM" -> "3 PM", "3:00PM" -> "3:00 PM")
+        if csv_format == 'wonton':
+            # Remove prefixes like "Dinner:" or "Lunch:"
+            pickup_str = re.sub(r'^(Dinner|Lunch):', '', pickup_str, flags=re.IGNORECASE).strip()
+            # Extract the first part of a time range (e.g., "5:47AM-5:00AM" -> "5:47AM")
+            if '-' in pickup_str:
+                pickup_str = pickup_str.split('-')[0].strip()
+        # Normalize AM/PM formats (e.g., "5:47AM" -> "5:47 AM", "12:00PM" -> "12:00 PM")
         pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
         # Clean extra characters, keep numbers, colon, space, AM/PM
         pickup_str = re.sub(r'[^0-9: AMPM]', '', pickup_str)
-        # Handle range
-        if '-' in pickup_str:
-            parts = pickup_str.split('-')
-            start = parts[0].strip()
-            if len(parts) > 1:
-                end = parts[1].strip()
-                am_pm = None
-                if ' AM' in end:
-                    am_pm = ' AM'
-                elif ' PM' in end:
-                    am_pm = ' PM'
-                if am_pm and am_pm not in start:
-                    start += am_pm
-            pickup_str = start
-        # Try multiple formats
+        # Try parsing with multiple formats
         for fmt in ["%I:%M %p", "%I %p"]:
             try:
                 parsed_time = datetime.strptime(pickup_str, fmt).time()
-                print(f"Successfully parsed pickup time '{pickup_str}' as {parsed_time}")
+                print(f"Successfully parsed pickup time '{pickup_str}' as {parsed_time} for {csv_format}")
                 return parsed_time
             except ValueError:
                 continue
-        print(f"Failed to parse pickup time: {pickup_str}")
+        print(f"Failed to parse pickup time: '{pickup_str}' for {csv_format}")
         return datetime.min.time()
     except Exception as e:
-        print(f"Error parsing pickup time '{pickup_str}': {e}")
+        print(f"Error parsing pickup time '{pickup_str}' for {csv_format}: {e}")
         return datetime.min.time()
 
 def parse_date_from_item_name(item_name):
-    if item_name is None:
+    if not item_name or not isinstance(item_name, str):
+        print(f"Invalid item name for date parsing: {item_name}")
         return datetime.now(tz=LOCAL_TZ).date()
-    match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
-    if match:
-        date_str = match.group(1)
-        year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
-        return datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
-    return datetime.now(tz=LOCAL_TZ).date()
+    try:
+        match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
+        if match:
+            date_str = match.group(1)
+            year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
+            parsed_date = datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
+            print(f"Parsed date '{date_str}/{year}' from item_name '{item_name}' as {parsed_date}")
+            return parsed_date
+        print(f"No date found in item_name: '{item_name}'")
+        return datetime.now(tz=LOCAL_TZ).date()
+    except Exception as e:
+        print(f"Error parsing date from item_name '{item_name}': {e}")
+        return datetime.now(tz=LOCAL_TZ).date()
 
 def format_pickup_time(pickup_str):
-    if pickup_str is None:
+    if not pickup_str:
         return ''
     try:
         pickup_str = pickup_str.strip().upper()
@@ -276,7 +276,6 @@ The store is located at the back side of the plaza near Chabot Drive.
     cursor.close()
     conn.close()
 
-
 def send_dance_invoice(email, full_name, student_name, invoice_desp, invoice_num, total, invoice_url, custom_subject=None, custom_body=None):
     yag = yagmail.SMTP(DANCE_SENDER_EMAIL, DANCE_SENDER_PASSWORD)
 
@@ -393,6 +392,8 @@ def index():
                     missing = required_columns - set(df.columns)
                     flash(f"Missing required columns: {missing}", 'error')
                     os.remove(filepath)
+                    cursor.close()
+                    conn.close()
                     return redirect(url_for('index'))
 
                 for _, row in df.iterrows():
@@ -423,7 +424,7 @@ def index():
                             continue
 
                         pickup_date = parse_date_from_item_name(item_name)
-                        pickup_time_obj = parse_pickup_time(pickup_time_str)
+                        pickup_time_obj = parse_pickup_time(pickup_time_str, csv_format)
                         pickup_datetime = datetime.combine(pickup_date, pickup_time_obj).replace(tzinfo=LOCAL_TZ)
                         send_time = pickup_datetime - timedelta(hours=4)
                         print(f"Order {order_number}: Pickup time string: '{pickup_time_str}', Parsed pickup: {pickup_datetime}, Scheduled send: {send_time}")
