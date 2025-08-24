@@ -1,5 +1,6 @@
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import pandas as pd
 from flask import Flask, render_template, request, redirect, url_for, flash
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,30 +10,56 @@ from datetime import datetime, timedelta
 import re
 from zoneinfo import ZoneInfo
 
+# -----------------------------
+# Timezone
+# -----------------------------
 LOCAL_TZ = ZoneInfo('America/Los_Angeles')
 
+# -----------------------------
+# Flask app setup
+# -----------------------------
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'Uploads'
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')  # Fallback for local testing
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-DB_FILE = 'orders.db'
+# -----------------------------
+# Database (Postgres on Fly.io)
+# -----------------------------
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required. If you used 'flyctl postgres attach', it should be set on Fly.")
+
+# Normalize legacy URL scheme (postgres:// → postgresql://)
+def _normalize_db_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql://", 1)
+    return url
+
+NORMALIZED_DB_URL = _normalize_db_url(DATABASE_URL)
+
+
+def get_db_connection():
+    # psycopg2 will parse the DSN URL directly
+    return psycopg2.connect(NORMALIZED_DB_URL)  # Fly's URL usually includes sslmode=require already
+
 
 # Initialize database and handle schema migrations
+# (Creates the table if it doesn't exist)
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Create orders table if it doesn't exist
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             email TEXT,
             order_number TEXT,
             pickup_time TEXT,
             item_name TEXT,
             full_name TEXT,
-            send_time DATETIME,
+            send_time TIMESTAMPTZ,
             status TEXT DEFAULT 'pending',
             job_id TEXT,
             custom_subject TEXT,
@@ -42,32 +69,32 @@ def init_db():
             csv_format TEXT
         )
     ''')
-    
-    # Check if total, invoice_url, and csv_format columns exist, and add them if not
-    cursor.execute("PRAGMA table_info(orders)")
-    columns = [info[1] for info in cursor.fetchall()]
-    
-    if 'total' not in columns:
-        cursor.execute('ALTER TABLE orders ADD COLUMN total TEXT')
-    if 'invoice_url' not in columns:
-        cursor.execute('ALTER TABLE orders ADD COLUMN invoice_url TEXT')
-    if 'csv_format' not in columns:
-        cursor.execute('ALTER TABLE orders ADD COLUMN csv_format TEXT')
-    
+
     conn.commit()
+    cursor.close()
     conn.close()
+
 
 init_db()
 
+# -----------------------------
 # Scheduler with timezone
+# -----------------------------
 scheduler = BackgroundScheduler(timezone=str(LOCAL_TZ))
 scheduler.start()
 
+# -----------------------------
 # Email configuration
+# -----------------------------
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'orderbentolicious@gmail.com')  # Fallback for meals
 SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fallback for meals
-DANCE_SENDER_EMAIL = 'usa.tvda@gmail.com'
-DANCE_SENDER_PASSWORD = 'dntq izxf zqhr vyce'  # Temporary app password for Dance Invoice
+DANCE_SENDER_EMAIL = os.environ.get('DANCE_SENDER_EMAIL', 'usa.tvda@gmail.com')
+DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr vyce')  # Temporary app password for Dance Invoice
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
 
 def parse_pickup_time(pickup_str):
     if pickup_str is None:
@@ -81,6 +108,7 @@ def parse_pickup_time(pickup_str):
     except Exception:
         return datetime.min.time()  # Fallback
 
+
 def parse_date_from_item_name(item_name):
     if item_name is None:
         return datetime.now(tz=LOCAL_TZ).date()
@@ -90,6 +118,7 @@ def parse_date_from_item_name(item_name):
         year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
         return datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
     return datetime.now(tz=LOCAL_TZ).date()
+
 
 def format_pickup_time(pickup_str):
     if pickup_str is None:
@@ -104,23 +133,34 @@ def format_pickup_time(pickup_str):
     except Exception:
         return pickup_str
 
+
+# -----------------------------
+# Email senders
+# -----------------------------
+
 def send_reminder_email(order_id, csv_format='familymeal'):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT email, full_name, pickup_time, item_name, order_number, custom_subject, custom_body, total, invoice_url, csv_format FROM orders WHERE id = ?', (order_id,))
+    cursor.execute('''
+        SELECT email, full_name, pickup_time, item_name, order_number, custom_subject, custom_body, total, invoice_url, csv_format
+        FROM orders WHERE id = %s
+    ''', (order_id,))
     row = cursor.fetchone()
 
     if row:
-        email, full_name, pickup_time, item_name, order_number, custom_subject, custom_body, total, invoice_url, stored_csv_format = row
+        (
+            email, full_name, pickup_time, item_name, order_number,
+            custom_subject, custom_body, total, invoice_url, stored_csv_format
+        ) = row
         csv_format = stored_csv_format or csv_format
 
         sender_email = DANCE_SENDER_EMAIL if csv_format == 'dance_invoice' else SENDER_EMAIL
         sender_password = DANCE_SENDER_PASSWORD if csv_format == 'dance_invoice' else SENDER_PASSWORD
         yag = yagmail.SMTP(sender_email, sender_password)
         full_name = full_name.split()[0] if full_name else ''
-        
+
         formatted_pickup_time = format_pickup_time(pickup_time)
-        
+
         if csv_format == 'dance_invoice':
             student_name = pickup_time
             invoice_desp = item_name
@@ -149,7 +189,7 @@ Best regards,
 
 TVDA admin"""
         else:
-            if 'Wonton' in item_name:
+            if item_name and 'Wonton' in item_name:
                 date_str = item_name.split()[0]
                 default_subject = "[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})"
                 default_body = """Hi {full_name},
@@ -181,8 +221,8 @@ The store is located at the back side of the plaza near Chabot Drive.
         format_dict = {
             'parent_name': parent_name if 'parent_name' in locals() else '',
             'student_name': student_name if 'student_name' in locals() else '',
-            'invoice_num': invoice_num if 'invoice_num' in locals() else order_number or '',
-            'invoice_desp': invoice_desp if 'invoice_desp' in locals() else item_name or '',
+            'invoice_num': invoice_num if 'invoice_num' in locals() else (order_number or ''),
+            'invoice_desp': invoice_desp if 'invoice_desp' in locals() else (item_name or ''),
             'total': total or '',
             'invoice_url': invoice_url or '',
             'full_name': full_name or '',
@@ -198,6 +238,7 @@ The store is located at the back side of the plaza near Chabot Drive.
         except Exception as e:
             print(f"Error formatting subject/body for order {order_id}: {e}")
             flash(f"Error formatting email for order {order_id}: {e}", 'error')
+            cursor.close()
             conn.close()
             return
 
@@ -210,12 +251,15 @@ The store is located at the back side of the plaza near Chabot Drive.
                     pass
             yag.send(to=email, subject=subject, contents=contents)
             print(f"Email sent to {email}")
-            cursor.execute('UPDATE orders SET status = "sent" WHERE id = ?', (order_id,))
+            cursor.execute('UPDATE orders SET status = %s WHERE id = %s', ("sent", order_id))
             conn.commit()
         except Exception as e:
             print(f"Error sending email for order {order_id}: {e}")
             flash(f"Error sending email for order {order_id}: {e}", 'error')
+
+    cursor.close()
     conn.close()
+
 
 def send_dance_invoice(email, full_name, student_name, invoice_desp, invoice_num, total, invoice_url, custom_subject=None, custom_body=None):
     yag = yagmail.SMTP(DANCE_SENDER_EMAIL, DANCE_SENDER_PASSWORD)
@@ -268,12 +312,27 @@ TVDA admin"""
     except Exception as e:
         print(f"Error sending dance invoice to {email}: {e}")
 
+
+# -----------------------------
+# Jinja filter
+# -----------------------------
 @app.template_filter('format_datetime')
 def format_datetime(dt):
     if dt is None:
         return ''
-    return dt.strftime('%m-%d %I:%M:%S %p')
+    # dt may already be a datetime object (from Postgres), else it's a string
+    if isinstance(dt, datetime):
+        return dt.strftime('%m-%d %I:%M:%S %p')
+    try:
+        parsed = datetime.fromisoformat(dt)
+        return parsed.strftime('%m-%d %I:%M:%S %p')
+    except Exception:
+        return str(dt)
 
+
+# -----------------------------
+# Routes
+# -----------------------------
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -286,7 +345,7 @@ def index():
             file.save(filepath)
             try:
                 df = pd.read_csv(filepath)
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 cursor = conn.cursor()
                 success_count = 0
                 column_mappings = {
@@ -324,7 +383,7 @@ def index():
                         pickup_time_str = row[mapping['pickup_time']]
                         item_name = row[mapping['item_name']]
                         full_name = row[mapping['full_name']]
-                        
+
                         total = None
                         invoice_url = None
 
@@ -339,8 +398,8 @@ def index():
 
                             cursor.execute('''
                                 INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body, total, invoice_url, csv_format)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (email, order_number, pickup_time_str, item_name, full_name, send_time.isoformat(), 'sent', custom_subject, custom_body, total, invoice_url, csv_format))
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ''', (email, order_number, pickup_time_str, item_name, full_name, send_time, 'sent', custom_subject, custom_body, total, invoice_url, csv_format))
                             conn.commit()
 
                             send_dance_invoice(email=email, full_name=full_name, student_name=pickup_time_str, invoice_desp=item_name, invoice_num=order_number, total=total, invoice_url=invoice_url, custom_subject=custom_subject, custom_body=custom_body)
@@ -354,21 +413,26 @@ def index():
 
                         cursor.execute('''
                             INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body, total, invoice_url, csv_format)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (email, order_number, pickup_time_str, item_name, full_name, send_time.isoformat(), 'pending', custom_subject, custom_body, total, invoice_url, csv_format))
-                        order_id = cursor.lastrowid
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ''', (email, order_number, pickup_time_str, item_name, full_name, send_time, 'pending', custom_subject, custom_body, total, invoice_url, csv_format))
+                        order_id = cursor.lastrowid if hasattr(cursor, 'lastrowid') else None
+                        if order_id is None:
+                            # psycopg2 doesn't always expose lastrowid; fetch with RETURNING pattern
+                            cursor.execute('SELECT currval(pg_get_serial_sequence(%s, %s))', ('orders', 'id'))
+                            order_id = cursor.fetchone()[0]
 
                         job_id = None
                         if send_time > datetime.now(tz=LOCAL_TZ):
                             trigger = DateTrigger(run_date=send_time)
                             job = scheduler.add_job(send_reminder_email, trigger, args=[order_id, csv_format])
                             job_id = job.id
-                        cursor.execute('UPDATE orders SET job_id = ? WHERE id = ?', (job_id, order_id))
+                        cursor.execute('UPDATE orders SET job_id = %s WHERE id = %s', (job_id, order_id))
                         success_count += 1
                     except Exception as e:
                         print(f"Error processing row {row.to_dict()}: {e}")
                         flash(f"Error processing row for {row.get(mapping['email'], 'unknown')}: {e}", 'error')
                 conn.commit()
+                cursor.close()
                 conn.close()
                 os.remove(filepath)
                 flash(f'Successfully processed {success_count} orders', 'success')
@@ -380,9 +444,10 @@ def index():
         flash('Invalid file', 'error')
     return render_template('index.html')
 
+
 @app.route('/scheduled')
 def scheduled():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         SELECT id, full_name, email, item_name, pickup_time, send_time, status 
@@ -390,38 +455,49 @@ def scheduled():
         ORDER BY send_time DESC
     ''')
     rows = cursor.fetchall()
-    # Convert send_time strings to datetime objects
-    rows = [
-        (row[0], row[1], row[2], row[3], row[4], datetime.fromisoformat(row[5]) if isinstance(row[5], str) else row[5], row[6])
-        for row in rows
-    ]
+    cursor.close()
     conn.close()
-    return render_template('scheduled.html', rows=rows, now=datetime.now(tz=LOCAL_TZ))
+
+    # Ensure send_time is a datetime for the template
+    normalized_rows = []
+    for row in rows:
+        (rid, full_name, email, item_name, pickup_time, send_time, status) = row
+        if isinstance(send_time, str):
+            try:
+                send_time = datetime.fromisoformat(send_time)
+            except Exception:
+                pass
+        normalized_rows.append((rid, full_name, email, item_name, pickup_time, send_time, status))
+
+    return render_template('scheduled.html', rows=normalized_rows, now=datetime.now(tz=LOCAL_TZ))
+
 
 @app.route('/delete/<int:order_id>', methods=['GET'])
 def delete_order(order_id):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT status, job_id FROM orders WHERE id = ?', (order_id,))
+    cursor.execute('SELECT status, job_id FROM orders WHERE id = %s', (order_id,))
     row = cursor.fetchone()
     if row:
         status, job_id = row
         if status == 'pending' and job_id:
             try:
                 scheduler.remove_job(job_id)
-            except:
+            except Exception:
                 pass
-    cursor.execute('DELETE FROM orders WHERE id = ?', (order_id,))
+    cursor.execute('DELETE FROM orders WHERE id = %s', (order_id,))
     conn.commit()
+    cursor.close()
     conn.close()
     flash('Order deleted successfully', 'success')
     return redirect(url_for('scheduled'))
 
+
 @app.route('/send/<int:order_id>', methods=['GET'])
 def send_order(order_id):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT status, job_id, csv_format FROM orders WHERE id = ?', (order_id,))
+    cursor.execute('SELECT status, job_id, csv_format FROM orders WHERE id = %s', (order_id,))
     row = cursor.fetchone()
     if row:
         status, job_id, stored_csv_format = row
@@ -429,45 +505,52 @@ def send_order(order_id):
             if job_id:
                 try:
                     scheduler.remove_job(job_id)
-                except:
+                except Exception:
                     pass
             csv_format = stored_csv_format or 'familymeal'
+            cursor.close()
+            conn.close()
             send_reminder_email(order_id, csv_format)
             flash('Email sent successfully', 'success')
+            return redirect(url_for('scheduled'))
+    cursor.close()
     conn.close()
     return redirect(url_for('scheduled'))
+
 
 @app.route('/delete_bulk', methods=['POST'])
 def delete_bulk():
     orders = request.form.getlist('orders[]')
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     deleted_count = 0
     for order_id in orders:
-        cursor.execute('SELECT status, job_id FROM orders WHERE id = ?', (order_id,))
+        cursor.execute('SELECT status, job_id FROM orders WHERE id = %s', (order_id,))
         row = cursor.fetchone()
         if row:
             status, job_id = row
             if status == 'pending' and job_id:
                 try:
                     scheduler.remove_job(job_id)
-                except:
+                except Exception:
                     pass
-            cursor.execute('DELETE FROM orders WHERE id = ?', (order_id,))
+            cursor.execute('DELETE FROM orders WHERE id = %s', (order_id,))
             deleted_count += 1
     conn.commit()
+    cursor.close()
     conn.close()
     flash(f'Deleted {deleted_count} orders successfully', 'success')
     return redirect(url_for('scheduled'))
 
+
 @app.route('/send_bulk', methods=['POST'])
 def send_bulk():
     orders = request.form.getlist('orders[]')
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     sent_count = 0
     for order_id in orders:
-        cursor.execute('SELECT status, job_id, csv_format FROM orders WHERE id = ?', (order_id,))
+        cursor.execute('SELECT status, job_id, csv_format FROM orders WHERE id = %s', (order_id,))
         row = cursor.fetchone()
         if row:
             status, job_id, csv_format = row
@@ -475,13 +558,23 @@ def send_bulk():
                 if job_id:
                     try:
                         scheduler.remove_job(job_id)
-                    except:
+                    except Exception:
                         pass
+                # Close connection before sending email (network I/O) to avoid long-held DB locks
+                conn.commit()
+                cursor.close()
+                conn.close()
                 send_reminder_email(int(order_id), csv_format)
                 sent_count += 1
+                # Re-open for remaining iterations
+                conn = get_db_connection()
+                cursor = conn.cursor()
+    conn.commit()
+    cursor.close()
     conn.close()
     flash(f'Sent {sent_count} emails successfully', 'success')
     return redirect(url_for('scheduled'))
+
 
 if __name__ == '__main__':
     app.run(debug=True)
