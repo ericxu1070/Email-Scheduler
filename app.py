@@ -90,8 +90,9 @@ DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr 
 
 def parse_pickup_time(pickup_str, csv_format='familymeal'):
     if not pickup_str or not isinstance(pickup_str, str):
-        print(f"Invalid pickup time: {pickup_str}")
-        return datetime.min.time()
+        print(f"Invalid pickup time: '{pickup_str}' for {csv_format}")
+        flash(f"Invalid pickup time: '{pickup_str}' for {csv_format}", 'error')
+        return None  # Changed to None to catch errors early
     try:
         pickup_str = pickup_str.strip().upper()
         if csv_format == 'wonton':
@@ -100,7 +101,7 @@ def parse_pickup_time(pickup_str, csv_format='familymeal'):
             # Extract the first part of a time range (e.g., "5:47AM-5:00AM" -> "5:47AM")
             if '-' in pickup_str:
                 pickup_str = pickup_str.split('-')[0].strip()
-        # Normalize AM/PM formats (e.g., "5:47AM" -> "5:47 AM", "12:00PM" -> "12:00 PM")
+        # Normalize AM/PM formats (e.g., "7:32AM" -> "7:32 AM", "12:00PM" -> "12:00 PM")
         pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
         # Clean extra characters, keep numbers, colon, space, AM/PM
         pickup_str = re.sub(r'[^0-9: AMPM]', '', pickup_str)
@@ -113,14 +114,16 @@ def parse_pickup_time(pickup_str, csv_format='familymeal'):
             except ValueError:
                 continue
         print(f"Failed to parse pickup time: '{pickup_str}' for {csv_format}")
-        return datetime.min.time()
+        flash(f"Failed to parse pickup time: '{pickup_str}' for {csv_format}", 'error')
+        return None
     except Exception as e:
         print(f"Error parsing pickup time '{pickup_str}' for {csv_format}: {e}")
-        return datetime.min.time()
+        flash(f"Error parsing pickup time '{pickup_str}' for {csv_format}: {e}", 'error')
+        return None
 
 def parse_date_from_item_name(item_name):
     if not item_name or not isinstance(item_name, str):
-        print(f"Invalid item name for date parsing: {item_name}")
+        print(f"Invalid item name for date parsing: '{item_name}'")
         return datetime.now(tz=LOCAL_TZ).date()
     try:
         match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
@@ -425,6 +428,10 @@ def index():
 
                         pickup_date = parse_date_from_item_name(item_name)
                         pickup_time_obj = parse_pickup_time(pickup_time_str, csv_format)
+                        if pickup_time_obj is None:
+                            print(f"Skipping order {order_number} due to invalid pickup time: '{pickup_time_str}'")
+                            flash(f"Skipping order {order_number} due to invalid pickup time: '{pickup_time_str}'", 'error')
+                            continue
                         pickup_datetime = datetime.combine(pickup_date, pickup_time_obj).replace(tzinfo=LOCAL_TZ)
                         send_time = pickup_datetime - timedelta(hours=4)
                         print(f"Order {order_number}: Pickup time string: '{pickup_time_str}', Parsed pickup: {pickup_datetime}, Scheduled send: {send_time}")
