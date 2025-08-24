@@ -40,14 +40,12 @@ def _normalize_db_url(url: str) -> str:
 NORMALIZED_DB_URL = _normalize_db_url(DATABASE_URL)
 
 def get_db_connection():
-    # psycopg2 will parse the DSN URL directly
-    return psycopg2.connect(NORMALIZED_DB_URL)  # Fly's URL usually includes sslmode=require already
+    return psycopg2.connect(NORMALIZED_DB_URL)
 
 # Initialize database and handle schema migrations
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
             id SERIAL PRIMARY KEY,
@@ -66,7 +64,6 @@ def init_db():
             csv_format TEXT
         )
     ''')
-
     conn.commit()
     cursor.close()
     conn.close()
@@ -82,68 +79,42 @@ scheduler.start()
 # -----------------------------
 # Email configuration
 # -----------------------------
-SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'orderbentolicious@gmail.com')  # Fallback for meals
-SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fallback for meals
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'orderbentolicious@gmail.com')
+SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')
 DANCE_SENDER_EMAIL = os.environ.get('DANCE_SENDER_EMAIL', 'usa.tvda@gmail.com')
-DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr vyce')  # Temporary app password for Dance Invoice
+DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr vyce')
 
 # -----------------------------
 # Helpers
 # -----------------------------
 
 def parse_pickup_time(pickup_str):
-    if not pickup_str or not isinstance(pickup_str, str):
-        print(f"Invalid pickup time: {pickup_str}")
-        return datetime.min.time()  # Fallback to midnight if None or not a string
+    if pickup_str is None:
+        return datetime.min.time()
     try:
-        pickup_str = pickup_str.strip().upper()
-        # Normalize AM/PM formats (e.g., "3PM" -> "3 PM", "3:00PM" -> "3:00 PM")
-        pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
-        # Clean extra characters, keep numbers, colon, space, AM/PM
-        pickup_str = re.sub(r'[^0-9: AMPM]', '', pickup_str)
+        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
+        pickup_str = re.sub(r'[^0-9: AMPM-]', '', pickup_str)
         if '-' in pickup_str:
-            pickup_str = pickup_str.split('-')[0].strip()  # Take start time
-        # Try multiple formats
-        for fmt in ["%I:%M %p", "%I %p"]:
-            try:
-                return datetime.strptime(pickup_str, fmt).time()
-            except ValueError:
-                continue
-        print(f"Failed to parse pickup time: {pickup_str}")
-        return datetime.min.time()  # Fallback if all formats fail
-    except Exception as e:
-        print(f"Error parsing pickup time '{pickup_str}': {e}")
+            pickup_str = pickup_str.split('-')[0].strip()
+        return datetime.strptime(pickup_str, "%I:%M %p").time()
+    except Exception:
         return datetime.min.time()
 
 def parse_date_from_item_name(item_name):
-    if not item_name or not isinstance(item_name, str):
-        print(f"Invalid item name for date parsing: {item_name}")
+    if item_name is None:
         return datetime.now(tz=LOCAL_TZ).date()
-    try:
-        # Try MM/DD or MM/DD/YYYY
-        match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
-        if match:
-            date_str = match.group(1)
-            year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
-            return datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
-        # Try other formats like "Aug 24" or "August 24, 2025"
-        for fmt in ["%b %d", "%B %d, %Y", "%Y-%m-%d"]:
-            try:
-                return datetime.strptime(" ".join(item_name.split()[:2]), fmt).date()
-            except ValueError:
-                continue
-        print(f"Failed to parse date from item name: {item_name}")
-        return datetime.now(tz=LOCAL_TZ).date()
-    except Exception as e:
-        print(f"Error parsing date from '{item_name}': {e}")
-        return datetime.now(tz=LOCAL_TZ).date()
+    match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
+    if match:
+        date_str = match.group(1)
+        year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
+        return datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
+    return datetime.now(tz=LOCAL_TZ).date()
 
 def format_pickup_time(pickup_str):
     if pickup_str is None:
         return ''
     try:
-        pickup_str = pickup_str.strip().upper()
-        pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
+        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
         pickup_str = pickup_str.replace("  ", " ")
         if '-' in pickup_str:
             pickup_str = pickup_str.split('-')[0].strip()
@@ -394,6 +365,8 @@ def index():
                     missing = required_columns - set(df.columns)
                     flash(f"Missing required columns: {missing}", 'error')
                     os.remove(filepath)
+                    cursor.close()
+                    conn.close()
                     return redirect(url_for('index'))
 
                 for _, row in df.iterrows():
@@ -403,10 +376,6 @@ def index():
                         pickup_time_str = row[mapping['pickup_time']]
                         item_name = row[mapping['item_name']]
                         full_name = row[mapping['full_name']]
-
-                        if pd.isna(pickup_time_str) or pd.isna(item_name):
-                            print(f"Skipping row with missing pickup_time or item_name: {row.to_dict()}")
-                            continue
 
                         total = None
                         invoice_url = None
@@ -431,10 +400,6 @@ def index():
                         pickup_time_obj = parse_pickup_time(pickup_time_str)
                         pickup_datetime = datetime.combine(pickup_date, pickup_time_obj).replace(tzinfo=LOCAL_TZ)
                         send_time = pickup_datetime - timedelta(hours=4)
-                        print(f"Order {order_number}: Parsed pickup: {pickup_datetime}, Scheduled send: {send_time}")
-                        if send_time < datetime.now(tz=LOCAL_TZ):
-                            print(f"Warning: Send time {send_time} is in the past for order {order_number}")
-                            send_time = datetime.now(tz=LOCAL_TZ) + timedelta(minutes=5)
 
                         cursor.execute('''
                             INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body, total, invoice_url, csv_format)
@@ -448,9 +413,6 @@ def index():
                             trigger = DateTrigger(run_date=send_time)
                             job = scheduler.add_job(send_reminder_email, trigger, args=[order_id, csv_format])
                             job_id = job.id
-                        else:
-                            send_reminder_email(order_id, csv_format)
-                            cursor.execute('UPDATE orders SET status = %s WHERE id = %s', ('sent', order_id))
                         cursor.execute('UPDATE orders SET job_id = %s WHERE id = %s', (job_id, order_id))
                         success_count += 1
                     except Exception as e:
