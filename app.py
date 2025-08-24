@@ -89,15 +89,41 @@ DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr 
 # -----------------------------
 
 def parse_pickup_time(pickup_str):
-    if pickup_str is None:
+    if not pickup_str or not isinstance(pickup_str, str):
+        print(f"Invalid pickup time: {pickup_str}")
         return datetime.min.time()
     try:
-        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
-        pickup_str = re.sub(r'[^0-9: AMPM-]', '', pickup_str)
+        pickup_str = pickup_str.strip().upper()
+        # Normalize AM/PM formats (e.g., "3PM" -> "3 PM", "3:00PM" -> "3:00 PM")
+        pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
+        # Clean extra characters, keep numbers, colon, space, AM/PM
+        pickup_str = re.sub(r'[^0-9: AMPM]', '', pickup_str)
+        # Handle range
         if '-' in pickup_str:
-            pickup_str = pickup_str.split('-')[0].strip()
-        return datetime.strptime(pickup_str, "%I:%M %p").time()
-    except Exception:
+            parts = pickup_str.split('-')
+            start = parts[0].strip()
+            if len(parts) > 1:
+                end = parts[1].strip()
+                am_pm = None
+                if ' AM' in end:
+                    am_pm = ' AM'
+                elif ' PM' in end:
+                    am_pm = ' PM'
+                if am_pm and am_pm not in start:
+                    start += am_pm
+            pickup_str = start
+        # Try multiple formats
+        for fmt in ["%I:%M %p", "%I %p"]:
+            try:
+                parsed_time = datetime.strptime(pickup_str, fmt).time()
+                print(f"Successfully parsed pickup time '{pickup_str}' as {parsed_time}")
+                return parsed_time
+            except ValueError:
+                continue
+        print(f"Failed to parse pickup time: {pickup_str}")
+        return datetime.min.time()
+    except Exception as e:
+        print(f"Error parsing pickup time '{pickup_str}': {e}")
         return datetime.min.time()
 
 def parse_date_from_item_name(item_name):
@@ -114,7 +140,8 @@ def format_pickup_time(pickup_str):
     if pickup_str is None:
         return ''
     try:
-        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
+        pickup_str = pickup_str.strip().upper()
+        pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
         pickup_str = pickup_str.replace("  ", " ")
         if '-' in pickup_str:
             pickup_str = pickup_str.split('-')[0].strip()
@@ -249,6 +276,7 @@ The store is located at the back side of the plaza near Chabot Drive.
     cursor.close()
     conn.close()
 
+
 def send_dance_invoice(email, full_name, student_name, invoice_desp, invoice_num, total, invoice_url, custom_subject=None, custom_body=None):
     yag = yagmail.SMTP(DANCE_SENDER_EMAIL, DANCE_SENDER_PASSWORD)
 
@@ -365,8 +393,6 @@ def index():
                     missing = required_columns - set(df.columns)
                     flash(f"Missing required columns: {missing}", 'error')
                     os.remove(filepath)
-                    cursor.close()
-                    conn.close()
                     return redirect(url_for('index'))
 
                 for _, row in df.iterrows():
@@ -400,6 +426,7 @@ def index():
                         pickup_time_obj = parse_pickup_time(pickup_time_str)
                         pickup_datetime = datetime.combine(pickup_date, pickup_time_obj).replace(tzinfo=LOCAL_TZ)
                         send_time = pickup_datetime - timedelta(hours=4)
+                        print(f"Order {order_number}: Pickup time string: '{pickup_time_str}', Parsed pickup: {pickup_datetime}, Scheduled send: {send_time}")
 
                         cursor.execute('''
                             INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body, total, invoice_url, csv_format)
