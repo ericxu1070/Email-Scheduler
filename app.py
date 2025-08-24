@@ -39,14 +39,11 @@ def _normalize_db_url(url: str) -> str:
 
 NORMALIZED_DB_URL = _normalize_db_url(DATABASE_URL)
 
-
 def get_db_connection():
     # psycopg2 will parse the DSN URL directly
     return psycopg2.connect(NORMALIZED_DB_URL)  # Fly's URL usually includes sslmode=require already
 
-
 # Initialize database and handle schema migrations
-# (Creates the table if it doesn't exist)
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -74,7 +71,6 @@ def init_db():
     cursor.close()
     conn.close()
 
-
 init_db()
 
 # -----------------------------
@@ -91,40 +87,63 @@ SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'ttys iklb sbcw zvlt')  # Fa
 DANCE_SENDER_EMAIL = os.environ.get('DANCE_SENDER_EMAIL', 'usa.tvda@gmail.com')
 DANCE_SENDER_PASSWORD = os.environ.get('DANCE_SENDER_PASSWORD', 'dntq izxf zqhr vyce')  # Temporary app password for Dance Invoice
 
-
 # -----------------------------
 # Helpers
 # -----------------------------
 
 def parse_pickup_time(pickup_str):
-    if pickup_str is None:
-        return datetime.min.time()
+    if not pickup_str or not isinstance(pickup_str, str):
+        print(f"Invalid pickup time: {pickup_str}")
+        return datetime.min.time()  # Fallback to midnight if None or not a string
     try:
-        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
-        pickup_str = re.sub(r'[^0-9: AMPM-]', '', pickup_str)  # Clean extra chars
+        pickup_str = pickup_str.strip().upper()
+        # Normalize AM/PM formats (e.g., "3PM" -> "3 PM", "3:00PM" -> "3:00 PM")
+        pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
+        # Clean extra characters, keep numbers, colon, space, AM/PM
+        pickup_str = re.sub(r'[^0-9: AMPM]', '', pickup_str)
         if '-' in pickup_str:
             pickup_str = pickup_str.split('-')[0].strip()  # Take start time
-        return datetime.strptime(pickup_str, "%I:%M %p").time()
-    except Exception:
-        return datetime.min.time()  # Fallback
-
+        # Try multiple formats
+        for fmt in ["%I:%M %p", "%I %p"]:
+            try:
+                return datetime.strptime(pickup_str, fmt).time()
+            except ValueError:
+                continue
+        print(f"Failed to parse pickup time: {pickup_str}")
+        return datetime.min.time()  # Fallback if all formats fail
+    except Exception as e:
+        print(f"Error parsing pickup time '{pickup_str}': {e}")
+        return datetime.min.time()
 
 def parse_date_from_item_name(item_name):
-    if item_name is None:
+    if not item_name or not isinstance(item_name, str):
+        print(f"Invalid item name for date parsing: {item_name}")
         return datetime.now(tz=LOCAL_TZ).date()
-    match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
-    if match:
-        date_str = match.group(1)
-        year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
-        return datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
-    return datetime.now(tz=LOCAL_TZ).date()
-
+    try:
+        # Try MM/DD or MM/DD/YYYY
+        match = re.search(r'(\d{1,2}/\d{1,2})(/\d{4})?', item_name)
+        if match:
+            date_str = match.group(1)
+            year = match.group(2)[1:] if match.group(2) else str(datetime.now(tz=LOCAL_TZ).year)
+            return datetime.strptime(f"{date_str}/{year}", "%m/%d/%Y").date()
+        # Try other formats like "Aug 24" or "August 24, 2025"
+        for fmt in ["%b %d", "%B %d, %Y", "%Y-%m-%d"]:
+            try:
+                return datetime.strptime(" ".join(item_name.split()[:2]), fmt).date()
+            except ValueError:
+                continue
+        print(f"Failed to parse date from item name: {item_name}")
+        return datetime.now(tz=LOCAL_TZ).date()
+    except Exception as e:
+        print(f"Error parsing date from '{item_name}': {e}")
+        return datetime.now(tz=LOCAL_TZ).date()
 
 def format_pickup_time(pickup_str):
     if pickup_str is None:
         return ''
     try:
-        pickup_str = pickup_str.strip().upper().replace("AM", " AM").replace("PM", " PM")
+        pickup_str = pickup_str.strip().upper()
+        pickup_str = re.sub(r'(\d)([AP]M)', r'\1 \2', pickup_str)
         pickup_str = pickup_str.replace("  ", " ")
         if '-' in pickup_str:
             pickup_str = pickup_str.split('-')[0].strip()
@@ -132,7 +151,6 @@ def format_pickup_time(pickup_str):
         return pickup_dt.strftime("%I:%M %p")
     except Exception:
         return pickup_str
-
 
 # -----------------------------
 # Email senders
@@ -260,7 +278,6 @@ The store is located at the back side of the plaza near Chabot Drive.
     cursor.close()
     conn.close()
 
-
 def send_dance_invoice(email, full_name, student_name, invoice_desp, invoice_num, total, invoice_url, custom_subject=None, custom_body=None):
     yag = yagmail.SMTP(DANCE_SENDER_EMAIL, DANCE_SENDER_PASSWORD)
 
@@ -312,7 +329,6 @@ TVDA admin"""
     except Exception as e:
         print(f"Error sending dance invoice to {email}: {e}")
 
-
 # -----------------------------
 # Jinja filter
 # -----------------------------
@@ -320,7 +336,6 @@ TVDA admin"""
 def format_datetime(dt):
     if dt is None:
         return ''
-    # dt may already be a datetime object (from Postgres), else it's a string
     if isinstance(dt, datetime):
         return dt.strftime('%m-%d %I:%M:%S %p')
     try:
@@ -328,7 +343,6 @@ def format_datetime(dt):
         return parsed.strftime('%m-%d %I:%M:%S %p')
     except Exception:
         return str(dt)
-
 
 # -----------------------------
 # Routes
@@ -360,14 +374,14 @@ def index():
                         'email': 'Billing: E-mail Address',
                         'order_number': 'Purchase ID',
                         'pickup_time': 'PU Time',
-                        'item_name': 'Order Items: Category',  # Will construct
+                        'item_name': 'Order Items: Category',
                         'full_name': 'Billing: Full Name'
                     },
                     'dance_invoice': {
                         'email': 'Email',
                         'order_number': 'invoice_num',
-                        'pickup_time': 'Student_Name',  # Repurpose for student_name
-                        'item_name': 'Invoice desp',    # Repurpose for invoice_desp
+                        'pickup_time': 'Student_Name',
+                        'item_name': 'Invoice desp',
                         'full_name': 'Parent Name',
                         'total': 'total',
                         'invoice_url': 'Invoice URL'
@@ -375,6 +389,12 @@ def index():
                 }
 
                 mapping = column_mappings.get(csv_format, column_mappings['familymeal'])
+                required_columns = set(mapping.values())
+                if not required_columns.issubset(df.columns):
+                    missing = required_columns - set(df.columns)
+                    flash(f"Missing required columns: {missing}", 'error')
+                    os.remove(filepath)
+                    return redirect(url_for('index'))
 
                 for _, row in df.iterrows():
                     try:
@@ -383,6 +403,10 @@ def index():
                         pickup_time_str = row[mapping['pickup_time']]
                         item_name = row[mapping['item_name']]
                         full_name = row[mapping['full_name']]
+
+                        if pd.isna(pickup_time_str) or pd.isna(item_name):
+                            print(f"Skipping row with missing pickup_time or item_name: {row.to_dict()}")
+                            continue
 
                         total = None
                         invoice_url = None
@@ -393,15 +417,12 @@ def index():
                         elif csv_format == 'dance_invoice':
                             total = row[mapping['total']]
                             invoice_url = row[mapping['invoice_url']]
-
                             send_time = datetime.now(tz=LOCAL_TZ)
-
                             cursor.execute('''
                                 INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body, total, invoice_url, csv_format)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ''', (email, order_number, pickup_time_str, item_name, full_name, send_time, 'sent', custom_subject, custom_body, total, invoice_url, csv_format))
                             conn.commit()
-
                             send_dance_invoice(email=email, full_name=full_name, student_name=pickup_time_str, invoice_desp=item_name, invoice_num=order_number, total=total, invoice_url=invoice_url, custom_subject=custom_subject, custom_body=custom_body)
                             success_count += 1
                             continue
@@ -410,22 +431,26 @@ def index():
                         pickup_time_obj = parse_pickup_time(pickup_time_str)
                         pickup_datetime = datetime.combine(pickup_date, pickup_time_obj).replace(tzinfo=LOCAL_TZ)
                         send_time = pickup_datetime - timedelta(hours=4)
+                        print(f"Order {order_number}: Parsed pickup: {pickup_datetime}, Scheduled send: {send_time}")
+                        if send_time < datetime.now(tz=LOCAL_TZ):
+                            print(f"Warning: Send time {send_time} is in the past for order {order_number}")
+                            send_time = datetime.now(tz=LOCAL_TZ) + timedelta(minutes=5)
 
                         cursor.execute('''
                             INSERT INTO orders (email, order_number, pickup_time, item_name, full_name, send_time, status, custom_subject, custom_body, total, invoice_url, csv_format)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            RETURNING id
                         ''', (email, order_number, pickup_time_str, item_name, full_name, send_time, 'pending', custom_subject, custom_body, total, invoice_url, csv_format))
-                        order_id = cursor.lastrowid if hasattr(cursor, 'lastrowid') else None
-                        if order_id is None:
-                            # psycopg2 doesn't always expose lastrowid; fetch with RETURNING pattern
-                            cursor.execute('SELECT currval(pg_get_serial_sequence(%s, %s))', ('orders', 'id'))
-                            order_id = cursor.fetchone()[0]
+                        order_id = cursor.fetchone()[0]
 
                         job_id = None
                         if send_time > datetime.now(tz=LOCAL_TZ):
                             trigger = DateTrigger(run_date=send_time)
                             job = scheduler.add_job(send_reminder_email, trigger, args=[order_id, csv_format])
                             job_id = job.id
+                        else:
+                            send_reminder_email(order_id, csv_format)
+                            cursor.execute('UPDATE orders SET status = %s WHERE id = %s', ('sent', order_id))
                         cursor.execute('UPDATE orders SET job_id = %s WHERE id = %s', (job_id, order_id))
                         success_count += 1
                     except Exception as e:
@@ -437,13 +462,13 @@ def index():
                 os.remove(filepath)
                 flash(f'Successfully processed {success_count} orders', 'success')
             except Exception as e:
+                print(f"Error reading CSV file: {e}")
                 flash(f"Error reading CSV file: {e}", 'error')
                 if os.path.exists(filepath):
                     os.remove(filepath)
             return redirect(url_for('index'))
         flash('Invalid file', 'error')
     return render_template('index.html')
-
 
 @app.route('/scheduled')
 def scheduled():
@@ -458,7 +483,6 @@ def scheduled():
     cursor.close()
     conn.close()
 
-    # Ensure send_time is a datetime for the template
     normalized_rows = []
     for row in rows:
         (rid, full_name, email, item_name, pickup_time, send_time, status) = row
@@ -470,7 +494,6 @@ def scheduled():
         normalized_rows.append((rid, full_name, email, item_name, pickup_time, send_time, status))
 
     return render_template('scheduled.html', rows=normalized_rows, now=datetime.now(tz=LOCAL_TZ))
-
 
 @app.route('/delete/<int:order_id>', methods=['GET'])
 def delete_order(order_id):
@@ -491,7 +514,6 @@ def delete_order(order_id):
     conn.close()
     flash('Order deleted successfully', 'success')
     return redirect(url_for('scheduled'))
-
 
 @app.route('/send/<int:order_id>', methods=['GET'])
 def send_order(order_id):
@@ -517,7 +539,6 @@ def send_order(order_id):
     conn.close()
     return redirect(url_for('scheduled'))
 
-
 @app.route('/delete_bulk', methods=['POST'])
 def delete_bulk():
     orders = request.form.getlist('orders[]')
@@ -542,7 +563,6 @@ def delete_bulk():
     flash(f'Deleted {deleted_count} orders successfully', 'success')
     return redirect(url_for('scheduled'))
 
-
 @app.route('/send_bulk', methods=['POST'])
 def send_bulk():
     orders = request.form.getlist('orders[]')
@@ -560,13 +580,11 @@ def send_bulk():
                         scheduler.remove_job(job_id)
                     except Exception:
                         pass
-                # Close connection before sending email (network I/O) to avoid long-held DB locks
                 conn.commit()
                 cursor.close()
                 conn.close()
                 send_reminder_email(int(order_id), csv_format)
                 sent_count += 1
-                # Re-open for remaining iterations
                 conn = get_db_connection()
                 cursor = conn.cursor()
     conn.commit()
@@ -574,7 +592,6 @@ def send_bulk():
     conn.close()
     flash(f'Sent {sent_count} emails successfully', 'success')
     return redirect(url_for('scheduled'))
-
 
 if __name__ == '__main__':
     app.run(debug=True)
