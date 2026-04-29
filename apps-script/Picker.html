@@ -41,7 +41,7 @@
   <div id="status"></div>
 
   <script>
-    var CSV_FORMAT = <?= JSON.stringify(csvFormat) ?>;
+    var CSV_FORMAT = <?!= JSON.stringify(csvFormat) ?>;
 
     function submitForm() {
       var fileInput = document.getElementById('csvFile');
