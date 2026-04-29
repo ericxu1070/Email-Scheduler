@@ -28,7 +28,7 @@ function installTicker() {
   removeTicker();
   var minutes = Number(readConfig('TICKER_MINUTES')) || 5;
   ScriptApp.newTrigger(TICKER_FN).timeBased().everyMinutes(minutes).create();
-  SpreadsheetApp.getUi().alert('Ticker installed (every ' + minutes + ' min).');
+  _notify('Ticker installed (every ' + minutes + ' min).');
 }
 
 function removeTicker() {
@@ -41,7 +41,15 @@ function removeTicker() {
     }
   }
   if (removed > 0) {
-    SpreadsheetApp.getUi().alert('Removed ' + removed + ' ticker trigger(s).');
+    _notify('Removed ' + removed + ' ticker trigger(s).');
+  }
+}
+
+function _notify(msg) {
+  try {
+    SpreadsheetApp.getUi().alert(msg);
+  } catch (e) {
+    Logger.log(msg);
   }
 }
 
