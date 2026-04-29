@@ -160,7 +160,8 @@ function refreshSelected() {
       ctx.sheet.getRange(ctx.rows[i].sheetRow, errorCol).setValue('invalid pickup_time');
       continue;
     }
-    var pickupDate = parseDateFromItemName(row.item_name);
+    var dateSource = ctx.csvFormat === 'wonton' ? (row.sku || '') : row.item_name;
+    var pickupDate = parseDateFromItemName(dateSource);
     var sendTime = computeSendTime(pickupDate, pickupTime, leadHours);
     ctx.sheet.getRange(ctx.rows[i].sheetRow, sendCol).setValue(sendTime);
     ctx.sheet.getRange(ctx.rows[i].sheetRow, errorCol).setValue('');

@@ -6,7 +6,7 @@ var SHEET_NAMES = {
 
 var SHEET_HEADERS = {
   familymeal: ['email','order_number','pickup_time','item_name','full_name','custom_subject','custom_body','send_time','status','error'],
-  wonton:     ['email','order_number','pickup_time','item_name','full_name','custom_subject','custom_body','send_time','status','error'],
+  wonton:     ['email','order_number','pickup_time','sku','item_name','full_name','custom_subject','custom_body','send_time','status','error'],
   dance_invoice: ['email','invoice_num','student_name','invoice_desp','parent_name','total','invoice_url','custom_subject','custom_body','sent_at','status','error']
 };
 
@@ -19,11 +19,11 @@ var COLUMN_MAPPINGS = {
     full_name:    'Full Name'
   },
   wonton: {
-    email:        'Billing: E-mail Address',
-    order_number: 'Purchase ID',
-    pickup_time:  'PU Time',
-    item_name:    'Order Items: Category',
-    full_name:    'Billing: Full Name'
+    email:        'Email (Billing)',
+    order_number: 'Order Number',
+    pickup_time:  'Address 1 (Billing)',
+    item_name:    'Category',
+    full_name:    'Full Name (Billing)'
   },
   dance_invoice: {
     email:        'Email',
@@ -65,6 +65,8 @@ function importRows(csvFormat, csvText, customSubject, customBody) {
     }
     colIdx[key] = idx;
   }
+  var skuIdx = csvFormat === 'wonton' ? header.indexOf('SKU') : -1;
+
   var sheet = _ensureSheet(csvFormat);
   var leadHours = Number(readConfig('LEAD_HOURS')) || 4;
   var bentoBlob = (csvFormat !== 'dance_invoice') ? loadBentoBlob() : null;
@@ -86,6 +88,9 @@ function importRows(csvFormat, csvText, customSubject, customBody) {
         custom_subject: customSubject || '',
         custom_body:    customBody || ''
       };
+      if (csvFormat === 'wonton' && skuIdx !== -1) {
+        row.sku = raw[skuIdx] || '';
+      }
 
       if (csvFormat === 'dance_invoice') {
         row.total       = raw[colIdx.total];
@@ -107,7 +112,8 @@ function importRows(csvFormat, csvText, customSubject, customBody) {
         _appendRow(sheet, csvFormat, row, { status: 'error', send_time: '', error: 'invalid pickup_time' });
         continue;
       }
-      var pickupDate = parseDateFromItemName(row.item_name);
+      var dateSource = csvFormat === 'wonton' ? (row.sku || '') : row.item_name;
+      var pickupDate = parseDateFromItemName(dateSource);
       var sendTime = computeSendTime(pickupDate, pickupTime, leadHours);
 
       _appendRow(sheet, csvFormat, row, { status: 'pending', send_time: sendTime, error: '' });

@@ -1,0 +1,12 @@
+Order Number,Order Status,Order Date,Customer Note,Full Name (Billing),Address 1 (Billing),Phone (Billing),Email (Billing),SKU,Quantity,Order Line Total,Category,Order Total Amount
+7666,Processing,2026-04-06,,First Last,Lunch: 11:00am-2:00pm,123 456 7890,ericxu1070@gmail.com,05/04,1,30,Wonton,60
+7666,Processing,2026-04-06,,First Last,Lunch: 11:00am-2:00pm,(123)-456-7890,ericxu1070@gmail.com,5/28,1,30,Wonton,60
+7667,Processing,2026-04-11,,First Last,Dinner: 4:30pm-7:30pm,1234567890,ericxu1070@gmail.com,05/07,1,30,Wonton,30
+7668,Processing,2026-04-26,,First Last,Dinner: 4:30pm-7:30pm,1234567890,ericxu1070@gmail.com,05/04,2,60,Wonton,60
+7669,Processing,2026-04-26,,First Last,Dinner: 4:30pm-7:30pm,1234567890,ericxu1070@gmail.com,05/07,1,30,Wonton,30
+7670,Processing,2026-04-26,,First Last,Lunch: 11:00am-2:00pm,(123) 456-7890,ericxu1070@gmail.com,5/18,2,60,Wonton,60
+7671,Processing,2026-04-26,,First Last,Dinner: 4:30pm-7:30pm,(123) 456-7891,ericxu1070@gmail.com,5/11,1,30,Wonton,30
+7672,Processing,2026-04-26,,First Last,Dinner: 4:30pm-7:30pm,(123) 456-7892,ericxu1070@gmail.com,5/14,1,30,Wonton,30
+7673,Processing,2026-04-27,,First Last,Dinner: 4:30pm-7:30pm,(123) 456-7893,ericxu1070@gmail.com,05/07,1,30,Wonton,30
+7674,Processing,2026-04-27,,First Last,Dinner: 4:30pm-7:30pm,(123) 456-7894,ericxu1070@gmail.com,05/07,1,30,Wonton,30
+7675,Processing,2026-04-27,,First Last,Dinner: 4:30pm-7:30pm,(123) 456-7895,ericxu1070@gmail.com,05/04,1,30,Wonton,30

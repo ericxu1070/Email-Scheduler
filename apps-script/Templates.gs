@@ -1,6 +1,6 @@
 var DEFAULT_SUBJECTS = {
   familymeal: '[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})',
-  wonton:     '[Bentolicious] {item_name} Pick Up Reminder (Order #{order_number})',
+  wonton:     '[Bentolicious] {pickup_date_short} {item_name} Pick Up Reminder (Order #{order_number})',
   dance_invoice: '[TVDA] {invoice_desp}_{student_name}_#({invoice_num})'
 };
 
@@ -46,8 +46,16 @@ function formatTemplate(template, ctx) {
 function buildEmailContext(row, csvFormat) {
   var firstName = row.full_name ? String(row.full_name).split(/\s+/)[0] : '';
   var pickupDate = '';
-  if (csvFormat !== 'dance_invoice' && row.item_name) {
-    pickupDate = formatPickupDate(parseDateFromItemName(row.item_name));
+  var pickupDateShort = '';
+  var dateParts = null;
+  if (csvFormat === 'wonton' && row.sku) {
+    dateParts = parseDateFromItemName(row.sku);
+  } else if (csvFormat !== 'dance_invoice' && row.item_name) {
+    dateParts = parseDateFromItemName(row.item_name);
+  }
+  if (dateParts) {
+    pickupDate = formatPickupDate(dateParts);
+    pickupDateShort = dateParts.month + '/' + dateParts.day;
   }
 
   var ctx = {
@@ -57,6 +65,7 @@ function buildEmailContext(row, csvFormat) {
     item_name:    row.item_name || '',
     pickup_time:  formatPickupTime(row.pickup_time),
     pickup_date:  pickupDate,
+    pickup_date_short: pickupDateShort,
     date_str:     pickupDate,
     student_name: '',
     invoice_num:  row.order_number || '',
