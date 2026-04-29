@@ -1,0 +1,4 @@
+Email,invoice_num,Student_Name,Invoice desp,Parent Name,total,Invoice URL
+ericxu1070@gmail.com,INV-3001,Emma Chen,April 2026 Tuition,Linda Chen,$180.00,https://example.com/invoice/3001
+ericxu1070@gmail.com,INV-3002,Jacob Lee,Spring Recital Fee,Kevin Lee,$75.00,https://example.com/invoice/3002
+ericxu1070@gmail.com,INV-3003,Sophia Wang,Costume Fee,Michelle Wang,$120.00,https://example.com/invoice/3003
