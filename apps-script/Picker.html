@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 12px; color: #333; }
+    label { display: block; margin: 10px 0 4px; font-weight: bold; font-size: 13px; }
+    input[type="file"], input[type="text"], textarea {
+      width: 100%; box-sizing: border-box; padding: 6px;
+      border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+    }
+    textarea { min-height: 70px; resize: vertical; }
+    .row { margin-bottom: 8px; }
+    .actions { margin-top: 14px; text-align: right; }
+    button {
+      padding: 8px 14px; border: none; border-radius: 4px;
+      background: #1a73e8; color: white; cursor: pointer; font-size: 13px;
+    }
+    button:disabled { background: #999; cursor: wait; }
+    #status { margin-top: 12px; font-size: 12px; white-space: pre-wrap; }
+    .error { color: #c5221f; }
+    .ok { color: #137333; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <label for="csvFile">CSV file (<?= formatLabel ?>)</label>
+    <input type="file" id="csvFile" accept=".csv,text/csv">
+  </div>
+  <div class="row">
+    <label for="customSubject">Custom subject (optional)</label>
+    <input type="text" id="customSubject" placeholder="Leave blank to use default">
+  </div>
+  <div class="row">
+    <label for="customBody">Custom body (optional)</label>
+    <textarea id="customBody" placeholder="Leave blank to use default. Use {full_name}, {item_name}, {pickup_time}, etc."></textarea>
+  </div>
+  <div class="actions">
+    <button id="submit" onclick="submitForm()">Import</button>
+  </div>
+  <div id="status"></div>
+
+  <script>
+    var CSV_FORMAT = <?= JSON.stringify(csvFormat) ?>;
+
+    function submitForm() {
+      var fileInput = document.getElementById('csvFile');
+      var statusEl = document.getElementById('status');
+      var btn = document.getElementById('submit');
+      statusEl.textContent = '';
+      statusEl.className = '';
+
+      if (!fileInput.files || !fileInput.files[0]) {
+        statusEl.textContent = 'Please choose a CSV file.';
+        statusEl.className = 'error';
+        return;
+      }
+      var file = fileInput.files[0];
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var text = e.target.result;
+        var subj = document.getElementById('customSubject').value;
+        var body = document.getElementById('customBody').value;
+        btn.disabled = true;
+        statusEl.textContent = 'Importing...';
+        google.script.run
+          .withSuccessHandler(function(result) {
+            btn.disabled = false;
+            var msg = 'Imported ' + result.inserted + ' rows.';
+            if (result.errors && result.errors.length) {
+              msg += '\n\nIssues:\n - ' + result.errors.join('\n - ');
+              statusEl.className = 'error';
+            } else {
+              statusEl.className = 'ok';
+            }
+            statusEl.textContent = msg;
+          })
+          .withFailureHandler(function(err) {
+            btn.disabled = false;
+            statusEl.className = 'error';
+            statusEl.textContent = 'Import failed: ' + (err && err.message ? err.message : err);
+          })
+          .importRows(CSV_FORMAT, text, subj, body);
+      };
+      reader.onerror = function() {
+        statusEl.className = 'error';
+        statusEl.textContent = 'Could not read the file.';
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
