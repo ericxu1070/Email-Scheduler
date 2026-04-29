@@ -51,15 +51,30 @@ function _todayInTz() {
 }
 
 function formatPickupTime(pickupStr) {
-  if (!pickupStr) return '';
+  if (pickupStr == null || pickupStr === '') return '';
+  if (pickupStr instanceof Date) {
+    return Utilities.formatDate(pickupStr, TZ, 'h:mm a');
+  }
   var s = String(pickupStr).trim().toUpperCase();
   s = s.replace(/(\d)([AP]M)/g, '$1 $2').replace(/\s+/g, ' ');
   if (s.indexOf('-') !== -1) s = s.split('-')[0].trim();
+  s = s.replace(/^(DINNER|LUNCH):/i, '').trim();
   var m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
-  if (!m) return pickupStr;
+  if (!m) return String(pickupStr);
   var h = parseInt(m[1], 10);
   var min = m[2];
   return h + ':' + min + ' ' + m[3];
+}
+
+function formatPickupDate(dateParts) {
+  if (!dateParts) return '';
+  try {
+    var iso = Utilities.formatString('%04d-%02d-%02d', dateParts.year, dateParts.month, dateParts.day);
+    var d = Utilities.parseDate(iso, TZ, 'yyyy-MM-dd');
+    return Utilities.formatDate(d, TZ, 'EEEE, MMMM d');
+  } catch (e) {
+    return '';
+  }
 }
 
 function computeSendTime(dateParts, timeParts, leadHours) {

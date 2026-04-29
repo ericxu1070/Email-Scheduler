@@ -65,8 +65,6 @@ function importRows(csvFormat, csvText, customSubject, customBody) {
     }
     colIdx[key] = idx;
   }
-  var skuIdx = csvFormat === 'wonton' ? header.indexOf('Order Items: SKU') : -1;
-
   var sheet = _ensureSheet(csvFormat);
   var leadHours = Number(readConfig('LEAD_HOURS')) || 4;
   var bentoBlob = (csvFormat !== 'dance_invoice') ? loadBentoBlob() : null;
@@ -88,11 +86,6 @@ function importRows(csvFormat, csvText, customSubject, customBody) {
         custom_subject: customSubject || '',
         custom_body:    customBody || ''
       };
-
-      if (csvFormat === 'wonton' && skuIdx !== -1) {
-        var sku = raw[skuIdx] || '';
-        row.item_name = (sku + ' ' + (row.item_name || '')).trim();
-      }
 
       if (csvFormat === 'dance_invoice') {
         row.total       = raw[colIdx.total];
@@ -138,6 +131,11 @@ function _ensureSheet(csvFormat) {
   } else if (sheet.getLastRow() === 0) {
     sheet.appendRow(SHEET_HEADERS[csvFormat]);
     sheet.setFrozenRows(1);
+  }
+  var headers = SHEET_HEADERS[csvFormat];
+  var ptIdx = headers.indexOf('pickup_time');
+  if (ptIdx !== -1) {
+    sheet.getRange(1, ptIdx + 1, sheet.getMaxRows(), 1).setNumberFormat('@');
   }
   return sheet;
 }
